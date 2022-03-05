@@ -1,0 +1,32 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          # If using raven with OpenYurt stack, prefer to scheduler to the cloud node.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 2
+              preference:
+                matchExpressions:
+                  - key: openyurt.io/is-edge-worker
+                    operator: In
+                    values:
+                      - "false"
+            - weight: 1
+              preference:
+                matchExpressions:
+                    - key: node-role.kubernetes.io/master
+                      operator: DoesNotExist
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          operator: "Exists"
+          effect: "NoSchedule"
+      nodeSelector:
+        beta.kubernetes.io/arch: amd64
+        beta.kubernetes.io/os: linux
