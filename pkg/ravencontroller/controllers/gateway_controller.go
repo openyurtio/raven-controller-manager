@@ -227,6 +227,7 @@ func (r *GatewayReconciler) mapNodeToRequest(object client.Object) []reconcile.R
 	}
 	if err != nil {
 		r.Log.Error(err, "unable to get Gateway")
+		return []reconcile.Request{}
 	}
 	return []reconcile.Request{
 		{
