@@ -16,19 +16,7 @@ limitations under the License.
 
 package v1alpha1
 
-import (
-	"strings"
-)
-
 const (
-	// LabelTopologyKeyPrefix is the prefix of the labels representing topologies.
-	LabelTopologyKeyPrefix = "topology.raven.openyurt.io/"
-
-	// LabelCurrentGateway indicates which nodepool the node is currently belonging to
+	// LabelCurrentGateway indicates which gateway the node is currently belonging to
 	LabelCurrentGateway = "raven.openyurt.io/gateway"
 )
-
-// IsTopologyLabel returns if the given label is a topology label.
-func IsTopologyLabel(labelName string) bool {
-	return strings.HasPrefix(labelName, LabelTopologyKeyPrefix)
-}

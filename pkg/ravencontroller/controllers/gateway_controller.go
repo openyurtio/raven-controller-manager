@@ -95,12 +95,6 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	log.V(4).Info("managed subnet list", "subnets", subnets)
 	gw.Status.Subnets = subnets
 
-	// 3. add region labels to all managed nodes.
-	err = r.ensureRegionLabelForNodes(ctx, nodeList, &gw)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
 	err = r.Status().Update(ctx, &gw)
 	if err != nil {
 		log.Error(err, "unable to Update Gateway.status")
@@ -125,20 +119,6 @@ func (r *GatewayReconciler) recordEndpointEvent(ctx context.Context, sourceObj *
 			fmt.Sprintf("The active endpoint hosted by node %s was lost, privateIP: %s, publicIP: %s", previous.NodeName, previous.PrivateIP, previous.PublicIP))
 		log.V(2).Info("active endpoint lost", "nodeName", previous.NodeName, "privateIP", previous.PrivateIP, "publicIP", previous.PublicIP)
 		return
-	}
-}
-
-// ensureTopologyLabels ensures the topology labels source are consist with the given topologies.
-func ensureTopologyLabels(source map[string]string, topologies map[string]string) {
-	// cleanup first
-	for k := range source {
-		if ravenv1alpha1.IsTopologyLabel(k) {
-			delete(source, k)
-		}
-	}
-	// refill
-	for k, v := range topologies {
-		source[k] = v
 	}
 }
 
@@ -185,29 +165,6 @@ func (r *GatewayReconciler) electActiveEndpoint(nodeList corev1.NodeList, gw *ra
 		}
 	}
 	return
-}
-
-// ensureRegionLabelForNodes ensure the region labels of nodes that are managed by the Gateway are consist with the Gateway。
-func (r *GatewayReconciler) ensureRegionLabelForNodes(ctx context.Context, nodeList corev1.NodeList, gw *ravenv1alpha1.Gateway) error {
-	topologies := make(map[string]string)
-	for k, v := range gw.Labels {
-		if ravenv1alpha1.IsTopologyLabel(k) {
-			topologies[k] = gw.Labels[v]
-		}
-	}
-	for k := range nodeList.Items {
-		n := &nodeList.Items[k]
-		if n.Labels == nil {
-			n.Labels = make(map[string]string)
-		}
-		lb := n.Labels
-		ensureTopologyLabels(lb, topologies)
-		err := r.Update(ctx, n)
-		if err != nil {
-			return fmt.Errorf("unable to update node: %s", err)
-		}
-	}
-	return nil
 }
 
 // mapNodeToRequest maps the given Node object to reconcile.Request.
