@@ -69,7 +69,6 @@ spec:
                   required:
                   - nodeName
                   - privateIP
-                  - publicIP
                   type: object
                 type: array
               nodeSelector:
@@ -143,7 +142,6 @@ spec:
                 required:
                 - nodeName
                 - privateIP
-                - publicIP
                 type: object
               subnets:
                 description: Subnets contains all the subnets in the gateway.

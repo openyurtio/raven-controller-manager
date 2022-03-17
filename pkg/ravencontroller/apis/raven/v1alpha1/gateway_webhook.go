@@ -86,9 +86,11 @@ func (g *Gateway) ValidateDelete() error {
 func (r *Gateway) validateGateway() error {
 	var errList field.ErrorList
 	for i, ep := range r.Spec.Endpoints {
-		if err := validateIP(ep.PublicIP); err != nil {
-			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
-			errList = append(errList, field.Invalid(fldPath, ep.PublicIP, fmt.Sprintf("endpoints[%d].publicIP must be a validate IP address", i)))
+		if ep.PublicIP != "" {
+			if err := validateIP(ep.PublicIP); err != nil {
+				fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
+				errList = append(errList, field.Invalid(fldPath, ep.PublicIP, fmt.Sprintf("endpoints[%d].publicIP must be a validate IP address", i)))
+			}
 		}
 		if err := validateIP(ep.PrivateIP); err != nil {
 			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("privateIP")

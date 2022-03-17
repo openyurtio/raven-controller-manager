@@ -155,7 +155,11 @@ func (r *GatewayReconciler) electActiveEndpoint(nodeList corev1.NodeList, gw *ra
 
 	// the current active endpoint is still competent.
 	if checkActive(gw.Status.ActiveEndpoint) {
-		return gw.Status.ActiveEndpoint.DeepCopy()
+		for _, v := range gw.Spec.Endpoints {
+			if v.NodeName == gw.Status.ActiveEndpoint.NodeName {
+				return v.DeepCopy()
+			}
+		}
 	}
 
 	// try to elect an active endpoint.
