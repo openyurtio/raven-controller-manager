@@ -87,10 +87,7 @@ func main() {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Gateway")
 		os.Exit(1)
 	}
-	if err != nil {
-		setupLog.Error(err, "unable to initialize webhook")
-		os.Exit(1)
-	}
+
 	stopCh := ctrl.SetupSignalHandler()
 	err = ravenwebhook.Initialize(mgr, stopCh.Done())
 	if err != nil {
