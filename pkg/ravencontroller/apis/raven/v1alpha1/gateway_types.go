@@ -55,7 +55,7 @@ type Endpoint struct {
 	// NodeName is the Node hosting this endpoint.
 	NodeName   string            `json:"nodeName"`
 	PrivateIP  string            `json:"privateIP"`
-	PublicIP   string            `json:"publicIP"`
+	PublicIP   string            `json:"publicIP,omitempty"`
 	NATEnabled bool              `json:"natEnabled,omitempty"`
 	Config     map[string]string `json:"config,omitempty"`
 }
