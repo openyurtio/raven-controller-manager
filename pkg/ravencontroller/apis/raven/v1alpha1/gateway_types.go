@@ -20,11 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// All supported backend.
-const (
-	BackendLibreswan = "libreswan"
-)
-
 // Event reason.
 const (
 	// EventActiveEndpointElected is the event indicating a new active endpoint is elected.
@@ -41,29 +36,32 @@ type GatewaySpec struct {
 	// NodeSelector is a label query over nodes that managed by the gateway.
 	// The nodes in the same gateway should share same layer 3 network.
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
-	// Backend is the VPN tunnel implementation, only "libreswan" is supported currently.
-	// The default value "libreswan" will be used if empty.
-	Backend string `json:"backend"`
 	// TODO add a field to configure using vxlan or host-gw for inner gateway communication?
 	// Endpoints is a list of available Endpoint.
-	Endpoints []Endpoint `json:"endpoints,omitempty"`
+	Endpoints []Endpoint `json:"endpoints"`
 }
 
 // Endpoint stores all essential data for establishing the VPN tunnel.
 // TODO add priority field?
 type Endpoint struct {
 	// NodeName is the Node hosting this endpoint.
-	NodeName   string            `json:"nodeName"`
-	PrivateIP  string            `json:"privateIP"`
-	PublicIP   string            `json:"publicIP,omitempty"`
-	NATEnabled bool              `json:"natEnabled,omitempty"`
-	Config     map[string]string `json:"config,omitempty"`
+	NodeName string            `json:"nodeName"`
+	UnderNAT bool              `json:"underNAT,omitempty"`
+	PublicIP string            `json:"publicIP,omitempty"`
+	Config   map[string]string `json:"config,omitempty"`
+}
+
+// NodeInfo stores information of node managed by Gateway.
+type NodeInfo struct {
+	NodeName  string `json:"nodeName"`
+	PrivateIP string `json:"privateIP"`
+	Subnet    string `json:"subnet"`
 }
 
 // GatewayStatus defines the observed state of Gateway
 type GatewayStatus struct {
-	// Subnets contains all the subnets in the gateway.
-	Subnets []string `json:"subnets,omitempty"`
+	// Nodes contains all information of nodes managed by Gateway.
+	Nodes []NodeInfo `json:"nodes,omitempty"`
 	// ActiveEndpoint is the reference of the active endpoint.
 	ActiveEndpoint *Endpoint `json:"activeEndpoint,omitempty"`
 }

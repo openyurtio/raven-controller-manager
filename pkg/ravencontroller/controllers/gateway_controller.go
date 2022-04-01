@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
 
 	"github.com/go-logr/logr"
@@ -87,13 +88,17 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	r.recordEndpointEvent(ctx, &gw, gw.Status.ActiveEndpoint, activeEp)
 	gw.Status.ActiveEndpoint = activeEp
 
-	// 2. get subnet list of all nodes managed by the Gateway
-	var subnets []string
+	// 2. get nodeInfo list of nodes managed by the Gateway
+	var nodes []ravenv1alpha1.NodeInfo
 	for _, v := range nodeList.Items {
-		subnets = append(subnets, v.Spec.PodCIDR)
+		nodes = append(nodes, ravenv1alpha1.NodeInfo{
+			NodeName:  v.Name,
+			PrivateIP: getNodeInternalIP(v),
+			Subnet:    v.Spec.PodCIDR,
+		})
 	}
-	log.V(4).Info("managed subnet list", "subnets", subnets)
-	gw.Status.Subnets = subnets
+	log.V(4).Info("managed node info list", "nodes", nodes)
+	gw.Status.Nodes = nodes
 
 	err = r.Status().Update(ctx, &gw)
 	if err != nil {
@@ -109,15 +114,15 @@ func (r *GatewayReconciler) recordEndpointEvent(ctx context.Context, sourceObj *
 	if current != nil && !reflect.DeepEqual(previous, current) {
 		r.recorder.Event(sourceObj.DeepCopy(), corev1.EventTypeNormal,
 			ravenv1alpha1.EventActiveEndpointElected,
-			fmt.Sprintf("The endpoint hosted by node %s has been elected active endpoint, privateIP: %s, publicIP: %s", current.NodeName, current.PrivateIP, current.PublicIP))
-		log.V(2).Info("elected new active endpoint", "nodeName", current.NodeName, "privateIP", current.PrivateIP, "publicIP", current.PublicIP)
+			fmt.Sprintf("The endpoint hosted by node %s has been elected active endpoint, publicIP: %s", current.NodeName, current.PublicIP))
+		log.V(2).Info("elected new active endpoint", "nodeName", current.NodeName, "publicIP", current.PublicIP)
 		return
 	}
 	if current == nil && previous != nil {
 		r.recorder.Event(sourceObj.DeepCopy(), corev1.EventTypeWarning,
 			ravenv1alpha1.EventActiveEndpointLost,
-			fmt.Sprintf("The active endpoint hosted by node %s was lost, privateIP: %s, publicIP: %s", previous.NodeName, previous.PrivateIP, previous.PublicIP))
-		log.V(2).Info("active endpoint lost", "nodeName", previous.NodeName, "privateIP", previous.PrivateIP, "publicIP", previous.PublicIP)
+			fmt.Sprintf("The active endpoint hosted by node %s was lost, publicIP: %s", previous.NodeName, previous.PublicIP))
+		log.V(2).Info("active endpoint lost", "nodeName", previous.NodeName, "publicIP", previous.PublicIP)
 		return
 	}
 }
@@ -219,6 +224,18 @@ func getNodeCondition(status *corev1.NodeStatus, conditionType corev1.NodeCondit
 		}
 	}
 	return -1, nil
+}
+
+// getNodeInternalIP returns internal ip of the given `node`.
+func getNodeInternalIP(node corev1.Node) string {
+	var ip string
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == corev1.NodeInternalIP && net.ParseIP(addr.Address) != nil {
+			ip = addr.Address
+			break
+		}
+	}
+	return ip
 }
 
 // SetupWithManager sets up the controller with the Manager.
