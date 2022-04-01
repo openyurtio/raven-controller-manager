@@ -40,11 +40,6 @@ spec:
           spec:
             description: GatewaySpec defines the desired state of Gateway
             properties:
-              backend:
-                description: Backend is the VPN tunnel implementation, only "libreswan"
-                  is supported currently. The default value "libreswan" will be used
-                  if empty.
-                type: string
               endpoints:
                 description: TODO add a field to configure using vxlan or host-gw
                   for inner gateway communication? Endpoints is a list of available
@@ -57,18 +52,15 @@ spec:
                       additionalProperties:
                         type: string
                       type: object
-                    natEnabled:
-                      type: boolean
                     nodeName:
                       description: NodeName is the Node hosting this endpoint.
                       type: string
-                    privateIP:
-                      type: string
                     publicIP:
                       type: string
+                    underNAT:
+                      type: boolean
                   required:
                   - nodeName
-                  - privateIP
                   type: object
                 type: array
               nodeSelector:
@@ -118,7 +110,7 @@ spec:
                     type: object
                 type: object
             required:
-            - backend
+            - endpoints
             type: object
           status:
             description: GatewayStatus defines the observed state of Gateway
@@ -130,23 +122,32 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
-                  natEnabled:
-                    type: boolean
                   nodeName:
                     description: NodeName is the Node hosting this endpoint.
                     type: string
-                  privateIP:
-                    type: string
                   publicIP:
                     type: string
+                  underNAT:
+                    type: boolean
                 required:
                 - nodeName
-                - privateIP
                 type: object
-              subnets:
-                description: Subnets contains all the subnets in the gateway.
+              nodes:
+                description: Nodes contains all information of nodes managed by Gateway.
                 items:
-                  type: string
+                  description: NodeInfo stores information of node managed by Gateway.
+                  properties:
+                    nodeName:
+                      type: string
+                    privateIP:
+                      type: string
+                    subnet:
+                      type: string
+                  required:
+                  - nodeName
+                  - privateIP
+                  - subnet
+                  type: object
                 type: array
             type: object
         type: object

@@ -30,8 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
-var defaultBackend = BackendLibreswan
-
 // log is for logging in this package.
 var gatewaylog = logf.Log.WithName("gateway-resource")
 
@@ -54,9 +52,6 @@ func (g *Gateway) Default() {
 		MatchLabels: map[string]string{
 			LabelCurrentGateway: g.Name,
 		},
-	}
-	if g.Spec.Backend == "" {
-		g.Spec.Backend = defaultBackend
 	}
 }
 
@@ -91,10 +86,6 @@ func (r *Gateway) validateGateway() error {
 				fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
 				errList = append(errList, field.Invalid(fldPath, ep.PublicIP, fmt.Sprintf("endpoints[%d].publicIP must be a validate IP address", i)))
 			}
-		}
-		if err := validateIP(ep.PrivateIP); err != nil {
-			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("privateIP")
-			errList = append(errList, field.Invalid(fldPath, ep.PrivateIP, fmt.Sprintf("endpoints[%d].privateIP must be a validate IP address", i)))
 		}
 		if len(ep.NodeName) == 0 {
 			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("nodeName")

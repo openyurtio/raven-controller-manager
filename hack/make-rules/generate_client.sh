@@ -14,6 +14,7 @@ cp -r ${YURT_ROOT}/pkg/ravencontroller/{apis,hack} "${TMP_DIR}"/src/github.com/o
   cd "${TMP_DIR}"/src/github.com/openyurtio/raven-controller-manager/;
   HOLD_GO="${TMP_DIR}/src/github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/hack/hold.go"
   printf 'package hack\nimport "k8s.io/code-generator"\n' > ${HOLD_GO}
+  go mod tidy
   go mod vendor
   GOPATH=${TMP_DIR} GO111MODULE=off /bin/bash vendor/k8s.io/code-generator/generate-groups.sh all \
     github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/client github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis raven:v1alpha1 -h ./pkg/ravencontroller/hack/boilerplate.go.txt
