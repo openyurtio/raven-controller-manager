@@ -78,9 +78,9 @@ func (g *Gateway) ValidateDelete() error {
 	return nil
 }
 
-func (r *Gateway) validateGateway() error {
+func (g *Gateway) validateGateway() error {
 	var errList field.ErrorList
-	for i, ep := range r.Spec.Endpoints {
+	for i, ep := range g.Spec.Endpoints {
 		if ep.PublicIP != "" {
 			if err := validateIP(ep.PublicIP); err != nil {
 				fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
@@ -94,8 +94,8 @@ func (r *Gateway) validateGateway() error {
 	}
 	if errList != nil {
 		return apierrors.NewInvalid(
-			schema.GroupKind{Group: SchemeGroupVersion.Group, Kind: r.Kind},
-			r.Name, errList)
+			schema.GroupKind{Group: SchemeGroupVersion.Group, Kind: g.Kind},
+			g.Name, errList)
 	}
 	return nil
 }

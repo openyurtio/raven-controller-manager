@@ -8,19 +8,27 @@ For a complete example, pleas check out the [tutorial](https://github.com/openyu
 ## Getting Start
 
 ### Build and push raven-controller-manager
+
 ```bash
-$ REPO={Your_Docker_Image_Repository} make push
+REPO={Your_Docker_Image_Repository} make push
 ```
+
 The above command will do the following tasks:
+
 * Build an image {Your_Docker_Image_Repository}:{Git_Commit_Id} and push it to your own repository.
 * Generate a file named `raven-controller-manager.yaml` in `_output/yamls` dir.
+
 ### Install raven-controller-manager
-After the raven-controller-manager image is pushed and the `raven-controller-manager.yaml` is generated, 
-use the following command to install raven-controller-manager into your cluster: 
+
+After the raven-controller-manager image is pushed and the `raven-controller-manager.yaml` is generated,
+use the following command to install raven-controller-manager into your cluster:
+
 ```bash
-$ kubectl apply -f _output/yamls/raven-controller-manager.yaml
+kubectl apply -f _output/yamls/raven-controller-manager.yaml
 ```
+
 Then wait for the raven-controller-manager to be created successfully.
+
 ```bash
 $ kubectl get pod -n kube-system |grep raven-controller-manager
 raven-controller-manager-787d69f4bc-l55gp          1/1     Running   1          5m55s
@@ -34,9 +42,9 @@ our [contributing document](https://github.com/openyurtio/openyurt/blob/master/C
 
 ## Contact
 
-- Mailing List: openyurt@googlegroups.com
-- Slack: [channel](https://join.slack.com/t/openyurt/shared_invite/zt-iw2lvjzm-MxLcBHWm01y1t2fiTD15Gw)
-- Dingtalk Group (钉钉讨论群)
+* Mailing List: openyurt@googlegroups.com
+* Slack: [channel](https://join.slack.com/t/openyurt/shared_invite/zt-iw2lvjzm-MxLcBHWm01y1t2fiTD15Gw)
+* Dingtalk Group (钉钉讨论群)
 
 <div align="left">
     <img src="https://github.com/openyurtio/openyurt/blob/master/docs/img/ding.jpg" width=25% title="dingtalk">
