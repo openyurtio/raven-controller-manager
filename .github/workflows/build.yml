@@ -1,0 +1,69 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.after }}
+  cancel-in-progress: true
+
+env:
+  ALI_REGISTRY: registry.cn-hangzhou.aliyuncs.com/openyurt
+  DOCKERHUB: openyurt
+
+jobs:
+
+  docker-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      - name: Unit test
+        run: make test
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+        if: ${{ github.event_name != 'pull_request' && github.event.action != 'unassigned' }}
+
+      - name: Build and push
+        env:
+          REPO: ${{ env.DOCKERHUB }}
+        run: make REPO=$REPO push
+        if: ${{ github.event_name != 'pull_request' && github.event.action != 'unassigned' }}
+
+  docker-push-ali-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+      - name: Login to Alibaba Registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.ALI_REGISTRY }}
+          username: ${{ secrets.ALI_REGISTRY_USERNAME }}
+          password: ${{ secrets.ALI_REGISTRY_PASSWORD }}
+        if: ${{ github.event_name != 'pull_request' && github.event.action != 'unassigned' }}
+
+      - name: Build and push
+        env:
+          REPO: ${{ env.ALI_REGISTRY }}
+        run: make REPO=$REPO push
