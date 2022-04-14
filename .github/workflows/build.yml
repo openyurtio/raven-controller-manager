@@ -67,3 +67,4 @@ jobs:
         env:
           REPO: ${{ env.ALI_REGISTRY }}
         run: make REPO=$REPO push
+        if: ${{ github.event_name != 'pull_request' && github.event.action != 'unassigned' }}

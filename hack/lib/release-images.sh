@@ -56,6 +56,7 @@ build_multi_arch_binaries() {
         apk --no-cache add bash git; \
         cd /opt/src; umask 0022; \
         rm -rf ${YURT_BIN_DIR}/* ;"
+    sub_commands+="git config --global --add safe.directory /opt/src; "
     sub_commands+="GOARCH=amd64 bash ./hack/make-rules/build.sh ${bin_target}; "
     sub_commands+="chown -R $(id -u):$(id -g) /opt/src/_output"
 
