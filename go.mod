@@ -3,7 +3,7 @@ module github.com/openyurtio/raven-controller-manager
 go 1.15
 
 require (
-	github.com/go-logr/logr v0.3.0
+	github.com/go-logr/logr v1.2.3
 	github.com/stretchr/testify v1.7.1
 	k8s.io/api v0.19.7
 	k8s.io/apimachinery v0.19.7
