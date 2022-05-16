@@ -24,7 +24,26 @@ YURT_BUILD_IMAGE="golang:1.16-alpine"
 readonly SUPPORTED_OS=linux
 readonly bin_target=raven-controller-manager
 readonly region=${REGION:-us}
-readonly yurt_component_image="${REPO}/${bin_target}:${TAG}"
+
+# Parameters
+# $1: component name
+function get_image_name {
+    tag=$(get_version $1)
+    echo "${REPO}/$1:${tag}"
+}
+
+# The format is like:
+# "v0.1.0-a955ecc" if the HEAD is not at a tag,
+# "v0.1.0" otherwise.
+function get_version {
+    # If ${GIT_COMMIT} does not point at a tag, add commit suffix to the image tag.
+    if [[ -z $(git tag --points-at ${GIT_COMMIT}) ]]; then
+        tag="${TAG}-$(echo ${GIT_COMMIT} | cut -c 1-7)"
+    else
+        tag="${TAG}"
+    fi
+    echo "${tag}"
+}
 
 build_multi_arch_binaries() {
     local docker_run_opts=(
@@ -77,6 +96,7 @@ COPY ${bin_target} /usr/local/bin/${bin_target}
 ENTRYPOINT ["/usr/local/bin/${bin_target}"]
 EOF
 
+        yurt_component_image=$(get_image_name ${bin_target})
         ln "${binary_path}" "${docker_build_path}/${bin_target}"
         docker build --no-cache -t "${yurt_component_image}" -f "${docker_file_path}" ${docker_build_path}
         rm -rf ${docker_build_path}
@@ -98,6 +118,7 @@ build_images() {
 
 push_images() {
     build_images
+    yurt_component_image=$(get_image_name ${bin_target})
     docker push ${yurt_component_image}
 }
 
@@ -105,13 +126,14 @@ push_images() {
 gen_yamls() {
     local OUT_YAML_DIR=$YURT_ROOT/_output/yamls
     local BUILD_YAML_DIR=${OUT_YAML_DIR}/build
+    yurt_component_image=$(get_image_name ${bin_target})
     [ -f $BUILD_YAML_DIR ] || mkdir -p $BUILD_YAML_DIR
     mkdir -p ${BUILD_YAML_DIR}
     (
         rm -rf ${BUILD_YAML_DIR}/raven-controller-manager
         cp -rf $YURT_ROOT/config/raven-controller-manager/* ${BUILD_YAML_DIR}
         cd ${BUILD_YAML_DIR}/manager
-        kustomize edit set image controller=$REPO/raven-controller-manager:${TAG}
+        kustomize edit set image controller=${yurt_component_image}
 	)
     set +x
     echo "==== create raven-controller-manager.yaml in $OUT_YAML_DIR ===="
