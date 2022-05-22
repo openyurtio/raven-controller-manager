@@ -27,10 +27,14 @@ PROJECT_PREFIX=${PROJECT_PREFIX:-yurt}
 LABEL_PREFIX=${LABEL_PREFIX:-openyurt.io}
 GIT_COMMIT=$(git rev-parse --short HEAD)
 GIT_COMMIT_SHORT=$GIT_COMMIT
-GIT_VERSION=${GIT_VERSION:-$(git describe --abbrev=0 --tags)}
+GIT_VERSION=${GIT_VERSION:-$(git describe --abbrev=0 --tags --always)}
 BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 REPO=${REPO:-openyurt}
 TAG=${TAG:-${GIT_VERSION}}
+# Use v0.0.0 as default tag if no tag found.
+if [ "${TAG:0:7}" = "${GIT_COMMIT}" ]; then
+  TAG="v0.0.0"
+fi
 BIN_NAME=raven-controller-manager
 
 source "${YURT_ROOT}/hack/lib/build.sh"

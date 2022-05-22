@@ -28,7 +28,7 @@ readonly region=${REGION:-us}
 # Parameters
 # $1: component name
 function get_image_name {
-    tag=$(get_version $1)
+    tag=$(get_version)
     echo "${REPO}/$1:${tag}"
 }
 
