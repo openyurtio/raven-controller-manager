@@ -90,3 +90,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - crd.projectcalico.org
+  resources:
+  - blockaffinities
+  verbs:
+  - get
+  - list
+  - watch

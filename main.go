@@ -30,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	calicov3 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/calico/v3"
 	ravenv1alpha1 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/raven/v1alpha1"
 	"github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/controllers"
 	ravenwebhook "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/webhook"
@@ -45,6 +46,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(ravenv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(calicov3.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
