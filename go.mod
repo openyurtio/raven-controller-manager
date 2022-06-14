@@ -1,6 +1,6 @@
 module github.com/openyurtio/raven-controller-manager
 
-go 1.15
+go 1.16
 
 require (
 	github.com/go-logr/logr v1.2.0
@@ -11,11 +11,4 @@ require (
 	k8s.io/client-go v0.23.2
 	k8s.io/klog/v2 v2.30.0
 	sigs.k8s.io/controller-runtime v0.11.0
-)
-
-replace (
-	k8s.io/api => k8s.io/api v0.22.3
-	k8s.io/apimachinery => k8s.io/apimachinery v0.22.3
-	k8s.io/client-go => k8s.io/client-go v0.22.3
-	k8s.io/component-base => k8s.io/component-base v0.22.3
 )

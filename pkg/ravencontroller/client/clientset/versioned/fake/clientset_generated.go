@@ -74,7 +74,10 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 	return c.tracker
 }
 
-var _ clientset.Interface = &Clientset{}
+var (
+	_ clientset.Interface = &Clientset{}
+	_ testing.FakeClient  = &Clientset{}
+)
 
 // RavenV1alpha1 retrieves the RavenV1alpha1Client
 func (c *Clientset) RavenV1alpha1() ravenv1alpha1.RavenV1alpha1Interface {

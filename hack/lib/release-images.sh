@@ -19,7 +19,7 @@ set -x
 YURT_IMAGE_DIR=${YURT_OUTPUT_DIR}/images
 YURTCTL_SERVANT_DIR=${YURT_ROOT}/config/yurtctl-servant
 DOCKER_BUILD_BASE_IDR=$YURT_ROOT/dockerbuild
-YURT_BUILD_IMAGE="golang:1.16-alpine"
+YURT_BUILD_IMAGE="golang:1.17-alpine"
 
 readonly SUPPORTED_OS=linux
 readonly bin_target=raven-controller-manager
