@@ -40,13 +40,13 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./pkg/ravencontroller/..." output:crd:artifacts:config=config/raven-controller-manager/crd/bases  output:rbac:artifacts:config=config/raven-controller-manager/rbac output:webhook:artifacts:config=config/raven-controller-manager/webhook
 
 generate: controller-gen generate-goclient ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="pkg/ravencontroller/hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="pkg/ravencontroller/hack/boilerplate.go.txt" paths="./pkg/ravencontroller/apis/raven/..."
 
 
 
 generate-goclient: controller-gen ## Generate go codes.
 	hack/make-rules/generate_client.sh
-	$(CONTROLLER_GEN) object:headerFile="./pkg/ravencontroller/hack/boilerplate.go.txt" paths="./pkg/ravencontroller/apis/..."
+	$(CONTROLLER_GEN) object:headerFile="./pkg/ravencontroller/hack/boilerplate.go.txt" paths="./pkg/ravencontroller/apis/raven/..."
 
 
 fmt: ## Run go fmt against code.
