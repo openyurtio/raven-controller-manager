@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	calicov3 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/calico/v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -38,6 +37,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	calicov3 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/calico/v3"
 
 	ravenv1alpha1 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/raven/v1alpha1"
 )
@@ -55,6 +56,7 @@ type GatewayReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=raven.openyurt.io,resources=gateways/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=crd.projectcalico.org,resources=blockaffinities,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -93,7 +95,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 2. get nodeInfo list of nodes managed by the Gateway
 	var nodes []ravenv1alpha1.NodeInfo
 	for _, v := range nodeList.Items {
-		podCIDR, err := r.getPodCIDR(ctx, v)
+		podCIDRs, err := r.getPodCIDRs(ctx, v)
 		if err != nil {
 			log.Error(err, "unable to get podCIDR")
 			return ctrl.Result{}, err
@@ -101,7 +103,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		nodes = append(nodes, ravenv1alpha1.NodeInfo{
 			NodeName:  v.Name,
 			PrivateIP: getNodeInternalIP(v),
-			Subnet:    podCIDR,
+			Subnets:   podCIDRs,
 		})
 	}
 	log.V(4).Info("managed node info list", "nodes", nodes)
@@ -245,28 +247,31 @@ func getNodeInternalIP(node corev1.Node) string {
 	return ip
 }
 
-// getPodCIDR returns the pod IP range assigned to the node.
-func (r *GatewayReconciler) getPodCIDR(ctx context.Context, node corev1.Node) (string, error) {
-	podCIDR := node.Spec.PodCIDR
+// getPodCIDRs returns the pod IP range assigned to the node.
+func (r *GatewayReconciler) getPodCIDRs(ctx context.Context, node corev1.Node) ([]string, error) {
+	podCIDRs := make([]string, 0) //node.Spec.PodCIDR
 	for key := range node.Annotations {
 		if strings.Contains(key, "projectcalico.org") {
 			var blockAffinityList calicov3.BlockAffinityList
 			err := r.List(ctx, &blockAffinityList)
 			if err != nil {
 				err = fmt.Errorf("unable to list calico blockaffinity: %s", err)
-				return "", err
+				return podCIDRs, err
 			}
 
 			for _, v := range blockAffinityList.Items {
 				if v.Spec.Node != node.Name || v.Spec.State != "confirmed" {
 					continue
 				}
-				podCIDR = v.Spec.CIDR
+				podCIDRs = append(podCIDRs, v.Spec.CIDR)
 			}
 			break
 		}
 	}
-	return podCIDR, nil
+	if len(podCIDRs) == 0 {
+		podCIDRs = append(podCIDRs, node.Spec.PodCIDR)
+	}
+	return podCIDRs, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

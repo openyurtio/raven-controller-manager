@@ -53,9 +53,9 @@ type Endpoint struct {
 
 // NodeInfo stores information of node managed by Gateway.
 type NodeInfo struct {
-	NodeName  string `json:"nodeName"`
-	PrivateIP string `json:"privateIP"`
-	Subnet    string `json:"subnet"`
+	NodeName  string   `json:"nodeName"`
+	PrivateIP string   `json:"privateIP"`
+	Subnets   []string `json:"subnets"`
 }
 
 // GatewayStatus defines the observed state of Gateway
