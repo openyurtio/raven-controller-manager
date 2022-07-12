@@ -94,7 +94,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 2. get nodeInfo list of nodes managed by the Gateway
 	var nodes []ravenv1alpha1.NodeInfo
 	for _, v := range nodeList.Items {
-		podCIDR, err := r.getPodCIDR(ctx, v)
+		podCIDRs, err := r.getPodCIDRs(ctx, v)
 		if err != nil {
 			log.Error(err, "unable to get podCIDR")
 			return ctrl.Result{}, err
@@ -102,7 +102,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		nodes = append(nodes, ravenv1alpha1.NodeInfo{
 			NodeName:  v.Name,
 			PrivateIP: getNodeInternalIP(v),
-			Subnet:    podCIDR,
+			Subnets:   podCIDRs,
 		})
 	}
 	log.V(4).Info("managed node info list", "nodes", nodes)
@@ -246,27 +246,27 @@ func getNodeInternalIP(node corev1.Node) string {
 	return ip
 }
 
-// getPodCIDR returns the pod IP range assigned to the node.
-func (r *GatewayReconciler) getPodCIDR(ctx context.Context, node corev1.Node) (string, error) {
-	podCIDR := node.Spec.PodCIDR
+// getPodCIDRs returns the pod IP ranges assigned to the node.
+func (r *GatewayReconciler) getPodCIDRs(ctx context.Context, node corev1.Node) ([]string, error) {
+	podCIDRs := make([]string, 0)
 	for key := range node.Annotations {
 		if strings.Contains(key, "projectcalico.org") {
 			var blockAffinityList calicov3.BlockAffinityList
 			err := r.List(ctx, &blockAffinityList)
 			if err != nil {
 				err = fmt.Errorf("unable to list calico blockaffinity: %s", err)
-				return "", err
+				return nil, err
 			}
 			for _, v := range blockAffinityList.Items {
 				if v.Spec.Node != node.Name || v.Spec.State != "confirmed" {
 					continue
 				}
-				podCIDR = v.Spec.CIDR
+				podCIDRs = append(podCIDRs, v.Spec.CIDR)
 			}
-			break
+			return podCIDRs, nil
 		}
 	}
-	return podCIDR, nil
+	return append(podCIDRs, node.Spec.PodCIDR), nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
