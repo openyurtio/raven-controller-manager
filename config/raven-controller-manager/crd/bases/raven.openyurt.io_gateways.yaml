@@ -141,12 +141,14 @@ spec:
                       type: string
                     privateIP:
                       type: string
-                    subnet:
-                      type: string
+                    subnets:
+                      items:
+                        type: string
+                      type: array
                   required:
                   - nodeName
                   - privateIP
-                  - subnet
+                  - subnets
                   type: object
                 type: array
             type: object
