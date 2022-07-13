@@ -19,4 +19,6 @@ package v1alpha1
 const (
 	// LabelCurrentGateway indicates which gateway the node is currently belonging to
 	LabelCurrentGateway = "raven.openyurt.io/gateway"
+	// LabelAgentPod indicates whether pod is raven agent pod
+	LabelAgentPod = "raven.openyurt.io/agent"
 )

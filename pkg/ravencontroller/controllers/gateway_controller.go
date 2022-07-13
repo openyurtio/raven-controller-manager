@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/go-logr/logr"
+	combinations "github.com/mxschmitt/golang-combinations"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -55,6 +57,7 @@ type GatewayReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=raven.openyurt.io,resources=gateways/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=crd.projectcalico.org,resources=blockaffinities,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -71,7 +74,6 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Get(ctx, req.NamespacedName, &gw); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
 	// get all managed nodes
 	var nodeList corev1.NodeList
 	nodeSelector, err := labels.Parse(fmt.Sprintf(ravenv1alpha1.LabelCurrentGateway+"=%s", gw.Name))
@@ -86,59 +88,187 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// 1. try to elect an active endpoint if possible
-	activeEp := r.electActiveEndpoint(nodeList, &gw)
-	r.recordEndpointEvent(ctx, &gw, gw.Status.ActiveEndpoint, activeEp)
-	gw.Status.ActiveEndpoint = activeEp
+	// get all agent pods
+	var podList corev1.PodList
+	podSelector, err := labels.Parse(fmt.Sprintf(ravenv1alpha1.LabelAgentPod+"=%s", "true"))
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = r.List(ctx, &podList, &client.ListOptions{
+		LabelSelector: podSelector,
+	})
+	if err != nil {
+		err = fmt.Errorf("unable to list pods: %s", err)
+		return ctrl.Result{}, err
+	}
+
+	// 1. try to elect active endpoints if possible
+	activeEps, healthyAepNum := r.electActiveEndpoints(nodeList, podList, &gw)
+	if healthyAepNum == 0 {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	r.recordEndpointEvent(ctx, &gw, gw.Status.ActiveEndpoints, activeEps)
+	gw.Status.ActiveEndpoints = activeEps
 
 	// 2. get nodeInfo list of nodes managed by the Gateway
-	var nodes []ravenv1alpha1.NodeInfo
+	nodes := make([]ravenv1alpha1.NodeInfo, 0, len(nodeList.Items))
 	for _, v := range nodeList.Items {
 		podCIDRs, err := r.getPodCIDRs(ctx, v)
 		if err != nil {
 			log.Error(err, "unable to get podCIDR")
 			return ctrl.Result{}, err
 		}
-		nodes = append(nodes, ravenv1alpha1.NodeInfo{
+		node := ravenv1alpha1.NodeInfo{
 			NodeName:  v.Name,
 			PrivateIP: getNodeInternalIP(v),
 			Subnets:   podCIDRs,
-		})
+		}
+		if r.assignNodeToActiveEndpoint(&node, activeEps) {
+			continue
+		}
+		nodes = append(nodes, node)
 	}
 	log.V(4).Info("managed node info list", "nodes", nodes)
-	gw.Status.Nodes = nodes
 
-	err = r.Status().Update(ctx, &gw)
-	if err != nil {
-		log.Error(err, "unable to Update Gateway.status")
-		return ctrl.Result{}, err
+	// 3. assign nodes to healthy active endpoints
+	dividedNodes := divideNodes(nodes, healthyAepNum)
+	current := 0
+	for i := range activeEps {
+		if activeEps[i].Healthy && current < len(dividedNodes) {
+			activeEps[i].Nodes = append(activeEps[i].Nodes, dividedNodes[current]...)
+			current++
+		}
 	}
 
+	// 4. decide central gateway
+	var gatewayList ravenv1alpha1.GatewayList
+	err = r.List(ctx, &gatewayList, &client.ListOptions{})
+	if err != nil {
+		err = fmt.Errorf("unable to list gateways: %s", err)
+		return ctrl.Result{}, err
+	}
+	central := r.findCentralGateway(&gatewayList)
+
+	// 5. reconcile central gateway
+	if central != nil {
+		result, err := r.reconcileCentralGateway(ctx, central, &gw, &gatewayList)
+		if err != nil {
+			return result, err
+		}
+	}
+	// 6. update current gateway
+	if central == nil || central.Name != gw.Name {
+		gw.Status.Central = false
+		err = r.Status().Update(ctx, &gw)
+		if err != nil {
+			log.Error(err, "unable to Update Gateway.status")
+			return ctrl.Result{}, err
+		}
+	}
 	return ctrl.Result{}, nil
 }
 
-func (r *GatewayReconciler) recordEndpointEvent(ctx context.Context, sourceObj *ravenv1alpha1.Gateway, previous, current *ravenv1alpha1.Endpoint) {
+func (r *GatewayReconciler) reconcileCentralGateway(ctx context.Context, centralGw *ravenv1alpha1.Gateway, currentGw *ravenv1alpha1.Gateway, gwList *ravenv1alpha1.GatewayList) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	if current != nil && !reflect.DeepEqual(previous, current) {
+	log.V(4).Info("started reconciling central Gateway", "name", centralGw.Name)
+	defer func() {
+		log.V(4).Info("finished reconciling central Gateway", "name", centralGw.Name)
+	}()
+	if centralGw.Name == currentGw.Name {
+		centralGw.Status.ActiveEndpoints = currentGw.Status.ActiveEndpoints
+	}
+	centralGw.Status.Central = true
+
+	var gateways []ravenv1alpha1.Gateway
+	for _, v := range gwList.Items {
+		if v.Name != centralGw.Name {
+			gateways = append(gateways, v)
+		}
+	}
+
+	// 1. compute how many healthy active endpoint in central gateway
+	chunkNum := 0
+	for _, aep := range centralGw.Status.ActiveEndpoints {
+		if aep.Healthy {
+			chunkNum++
+		}
+	}
+
+	// 2. divide forward vpn connections by healthy active endpoint number
+	dividedForwards := divideForwards(generateForwards(gateways), chunkNum)
+	current := 0
+	for i := range centralGw.Status.ActiveEndpoints {
+		centralGw.Status.ActiveEndpoints[i].Forwards = make([]ravenv1alpha1.Forward, 0)
+		if centralGw.Status.ActiveEndpoints[i].Healthy && current < len(dividedForwards) {
+			for _, v := range dividedForwards[current] {
+				centralGw.Status.ActiveEndpoints[i].Forwards = append(centralGw.Status.ActiveEndpoints[i].Forwards, v, ravenv1alpha1.Forward{
+					From: v.To,
+					To:   v.From,
+				})
+			}
+			current++
+		}
+	}
+
+	err := r.Status().Update(ctx, centralGw)
+	if err != nil {
+		log.Error(err, "unable to Update Central Gateway.status")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *GatewayReconciler) findCentralGateway(gatewayList *ravenv1alpha1.GatewayList) *ravenv1alpha1.Gateway {
+	candidates := make([]ravenv1alpha1.Gateway, 0)
+	for _, v := range gatewayList.Items {
+		if v.Spec.Central {
+			candidates = append(candidates, v)
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	// select the early one
+	sort.Slice(candidates, func(i, j int) bool {
+		timestamp1 := candidates[i].GetCreationTimestamp()
+		timestamp2 := candidates[j].GetCreationTimestamp()
+		return timestamp1.Before(&timestamp2)
+	})
+	return &candidates[0]
+}
+
+func (r *GatewayReconciler) assignNodeToActiveEndpoint(node *ravenv1alpha1.NodeInfo, activeEps []*ravenv1alpha1.ActiveEndpoint) bool {
+	for _, aep := range activeEps {
+		if aep.Endpoint.NodeName == node.NodeName {
+			aep.Nodes = append(aep.Nodes, *node)
+			return true
+		}
+	}
+	return false
+}
+
+func (r *GatewayReconciler) recordEndpointEvent(ctx context.Context, sourceObj *ravenv1alpha1.Gateway, previous, current []*ravenv1alpha1.ActiveEndpoint) {
+	log := log.FromContext(ctx)
+	if len(current) != 0 && !reflect.DeepEqual(previous, current) {
 		r.recorder.Event(sourceObj.DeepCopy(), corev1.EventTypeNormal,
-			ravenv1alpha1.EventActiveEndpointElected,
-			fmt.Sprintf("The endpoint hosted by node %s has been elected active endpoint, publicIP: %s", current.NodeName, current.PublicIP))
-		log.V(2).Info("elected new active endpoint", "nodeName", current.NodeName, "publicIP", current.PublicIP)
+			ravenv1alpha1.EventActiveEndpointsElected,
+			fmt.Sprintf("the new active endpoints were elected in gateway: %s", sourceObj.Name))
+		log.V(2).Info("elected new active endpoints", "gwName", sourceObj.Name)
 		return
 	}
-	if current == nil && previous != nil {
+	if len(current) == 0 && len(previous) != 0 {
 		r.recorder.Event(sourceObj.DeepCopy(), corev1.EventTypeWarning,
-			ravenv1alpha1.EventActiveEndpointLost,
-			fmt.Sprintf("The active endpoint hosted by node %s was lost, publicIP: %s", previous.NodeName, previous.PublicIP))
-		log.V(2).Info("active endpoint lost", "nodeName", previous.NodeName, "publicIP", previous.PublicIP)
+			ravenv1alpha1.EventActiveEndpointsLost,
+			fmt.Sprintf("the active endpoints were lost in gateway: %s", sourceObj.Name))
+		log.V(2).Info("active endpoints were lost", "gwName", sourceObj.Name)
 		return
 	}
 }
 
-// electActiveEndpoint trys to elect an active Endpoint.
+// electActiveEndpoints trys to elect active Endpoints.
 // If the current active endpoint remains valid, then we don't change it.
 // Otherwise, try to elect a new one.
-func (r *GatewayReconciler) electActiveEndpoint(nodeList corev1.NodeList, gw *ravenv1alpha1.Gateway) (ep *ravenv1alpha1.Endpoint) {
+func (r *GatewayReconciler) electActiveEndpoints(nodeList corev1.NodeList, podList corev1.PodList, gw *ravenv1alpha1.Gateway) ([]*ravenv1alpha1.ActiveEndpoint, int) {
 	// get all ready nodes referenced by endpoints
 	readyNodes := make(map[string]corev1.Node)
 	for _, v := range nodeList.Items {
@@ -146,53 +276,114 @@ func (r *GatewayReconciler) electActiveEndpoint(nodeList corev1.NodeList, gw *ra
 			readyNodes[v.Name] = v
 		}
 	}
+	// get all ready agent pods referenced by endpoints
+	readyPods := make(map[string]corev1.Pod)
+	for _, p := range podList.Items {
+		if _, ok := readyNodes[p.Spec.NodeName]; ok && isPodReady(p) {
+			readyPods[p.Spec.NodeName] = p
+		}
+	}
 	// checkActive check if the given endpoint is able to become the active endpoint.
 	checkActive := func(ep *ravenv1alpha1.Endpoint) bool {
 		if ep == nil {
 			return false
 		}
-		// check if the node status is ready
-		if _, ok := readyNodes[ep.NodeName]; ok {
-			var inList bool
+		// check if the agent pod status is ready
+		if _, ok := readyPods[ep.NodeName]; ok {
 			// check if ep is in the Endpoint list
 			for _, v := range gw.Spec.Endpoints {
 				if reflect.DeepEqual(v, *ep) {
-					inList = true
-					break
+					return true
 				}
 			}
-			return inList
 		}
 		return false
 	}
 
-	// the current active endpoint is still competent.
-	if checkActive(gw.Status.ActiveEndpoint) {
-		for _, v := range gw.Spec.Endpoints {
-			if v.NodeName == gw.Status.ActiveEndpoint.NodeName {
-				return v.DeepCopy()
+	replicas := *(gw.Spec.Replicas)
+	activeEndpoints := make(map[string]*ravenv1alpha1.ActiveEndpoint)
+
+	current := 0
+	// 1. the current active endpoint is still competent.
+	for _, aep := range gw.Status.ActiveEndpoints {
+		if current == replicas {
+			break
+		}
+		if checkActive(aep.Endpoint) {
+			aep := aep.DeepCopy()
+			activeEndpoints[aep.Endpoint.NodeName] = &ravenv1alpha1.ActiveEndpoint{
+				Endpoint: aep.Endpoint,
+				Healthy:  true,
 			}
+			current++
 		}
 	}
 
-	// try to elect an active endpoint.
-	for _, v := range gw.Spec.Endpoints {
-		if checkActive(&v) {
-			return v.DeepCopy()
+	// 2. try to elect new healthy active endpoints
+	for _, ep := range gw.Spec.Endpoints {
+		if current == replicas {
+			break
+		}
+		if _, ok := activeEndpoints[ep.NodeName]; ok {
+			continue
+		}
+		ep := ep.DeepCopy()
+		if checkActive(ep) {
+			activeEndpoints[ep.NodeName] = &ravenv1alpha1.ActiveEndpoint{
+				Endpoint: ep,
+				Healthy:  true,
+			}
+			current++
 		}
 	}
-	return
+
+	healthyAepNum := len(activeEndpoints)
+
+	// 3. if not enough healthy active endpoint, use unhealthy one
+	for _, ep := range gw.Spec.Endpoints {
+		if current == replicas {
+			break
+		}
+		if _, ok := activeEndpoints[ep.NodeName]; ok {
+			continue
+		}
+		ep := ep.DeepCopy()
+		activeEndpoints[ep.NodeName] = &ravenv1alpha1.ActiveEndpoint{
+			Endpoint: ep,
+			Healthy:  false,
+		}
+		current++
+	}
+
+	res := make([]*ravenv1alpha1.ActiveEndpoint, 0, len(activeEndpoints))
+	for _, v := range activeEndpoints {
+		res = append(res, v)
+	}
+
+	return res, healthyAepNum
 }
 
-// mapNodeToRequest maps the given Node object to reconcile.Request.
-func (r *GatewayReconciler) mapNodeToRequest(object client.Object) []reconcile.Request {
-	node := object.(*corev1.Node)
+// mapPodToRequest maps the given Agent Pod object to reconcile.Request.
+func (r *GatewayReconciler) mapPodToRequest(object client.Object) []reconcile.Request {
+	pod := object.(*corev1.Pod)
+	nodeName := pod.Spec.NodeName
+	if nodeName == "" {
+		return []reconcile.Request{}
+	}
+	var node corev1.Node
+	err := r.Get(context.TODO(), types.NamespacedName{
+		Name: nodeName,
+	}, &node)
+	if err != nil {
+		r.Log.Error(err, "unable to get node")
+		return []reconcile.Request{}
+	}
 	gwName, ok := node.Labels[ravenv1alpha1.LabelCurrentGateway]
 	if !ok || gwName == "" {
 		return []reconcile.Request{}
 	}
 	var gw ravenv1alpha1.Gateway
-	err := r.Get(context.TODO(), types.NamespacedName{
+	err = r.Get(context.TODO(), types.NamespacedName{
 		Name: gwName,
 	}, &gw)
 	if apierrs.IsNotFound(err) {
@@ -213,6 +404,80 @@ func (r *GatewayReconciler) mapNodeToRequest(object client.Object) []reconcile.R
 	}
 }
 
+// divideNodes divides the given nodes into lists
+func divideNodes(nodes []ravenv1alpha1.NodeInfo, chunkNum int) [][]ravenv1alpha1.NodeInfo {
+	if len(nodes) == 0 || chunkNum == 0 {
+		return [][]ravenv1alpha1.NodeInfo{}
+	}
+	chunkSize := len(nodes) / chunkNum
+	if len(nodes)%chunkNum != 0 {
+		chunkSize++
+	}
+	chunks := make([][]ravenv1alpha1.NodeInfo, chunkNum)
+	for i := 0; i < chunkNum; i++ {
+		chunks[i] = make([]ravenv1alpha1.NodeInfo, 0, chunkSize)
+	}
+	for i, v := range nodes {
+		chunks[i%chunkNum] = append(chunks[i%chunkNum], v)
+	}
+	return chunks
+}
+
+// generateForwards generate all connections that need to forward by central gateway
+func generateForwards(gateways []ravenv1alpha1.Gateway) []ravenv1alpha1.Forward {
+	forwards := make([]ravenv1alpha1.Forward, 0)
+	gwMap := make(map[string]ravenv1alpha1.Gateway)
+	gwName := make([]string, 0)
+
+	for _, v := range gateways {
+		gwMap[v.Name] = v
+		gwName = append(gwName, v.Name)
+	}
+
+	needForward := func(gw1 ravenv1alpha1.Gateway, gw2 ravenv1alpha1.Gateway) bool {
+		forward := true
+		for _, v := range append(gw1.Spec.Endpoints, gw2.Spec.Endpoints...) {
+			if !v.UnderNAT {
+				forward = false
+				break
+			}
+		}
+		return forward
+	}
+
+	if len(gwName) > 1 {
+		for _, v := range combinations.Combinations(gwName, 2) {
+			if needForward(gwMap[v[0]], gwMap[v[1]]) {
+				forwards = append(forwards, ravenv1alpha1.Forward{
+					From: v[0],
+					To:   v[1],
+				})
+			}
+		}
+	}
+	return forwards
+}
+
+// divideForwards divides the given connections that need to forward.
+func divideForwards(forwards []ravenv1alpha1.Forward, chunkNum int) [][]ravenv1alpha1.Forward {
+	if len(forwards) == 0 || chunkNum == 0 {
+		return [][]ravenv1alpha1.Forward{}
+	}
+	chunkSize := len(forwards) / chunkNum
+	if len(forwards)%chunkNum != 0 {
+		chunkSize++
+	}
+	chunks := make([][]ravenv1alpha1.Forward, chunkNum)
+	for i := 0; i < chunkNum; i++ {
+		chunks[i] = make([]ravenv1alpha1.Forward, 0, chunkSize)
+	}
+
+	for i, v := range forwards {
+		chunks[i%chunkNum] = append(chunks[i%chunkNum], v)
+	}
+	return chunks
+}
+
 // isNodeReady checks if the `node` is `corev1.NodeReady`
 func isNodeReady(node corev1.Node) bool {
 	_, nc := getNodeCondition(&node.Status, corev1.NodeReady)
@@ -220,9 +485,30 @@ func isNodeReady(node corev1.Node) bool {
 	return nc != nil && nc.Status == corev1.ConditionTrue
 }
 
+// isPodReady checks if the `Pod` is `corev1.PodReady`
+func isPodReady(pod corev1.Pod) bool {
+	_, pc := getPodCondition(&pod.Status, corev1.PodReady)
+	// GetPodCondition will return nil and -1 if the condition is not present
+	return pc != nil && pc.Status == corev1.ConditionTrue
+}
+
 // getNodeCondition extracts the provided condition from the given status and returns that.
 // Returns nil and -1 if the condition is not present, and the index of the located condition.
 func getNodeCondition(status *corev1.NodeStatus, conditionType corev1.NodeConditionType) (int, *corev1.NodeCondition) {
+	if status == nil {
+		return -1, nil
+	}
+	for i := range status.Conditions {
+		if status.Conditions[i].Type == conditionType {
+			return i, &status.Conditions[i]
+		}
+	}
+	return -1, nil
+}
+
+// getPodCondition extracts the provided condition from the given status and returns that.
+// Returns nil and -1 if the condition is not present, and the index of the located condition.
+func getPodCondition(status *corev1.PodStatus, conditionType corev1.PodConditionType) (int, *corev1.PodCondition) {
 	if status == nil {
 		return -1, nil
 	}
@@ -274,8 +560,8 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.recorder = mgr.GetEventRecorderFor("Gateway")
 	return ctrl.NewControllerManagedBy(mgr).For(&ravenv1alpha1.Gateway{}).
 		Watches(
-			&source.Kind{Type: &corev1.Node{}},
-			handler.EnqueueRequestsFromMapFunc(r.mapNodeToRequest),
-			builder.WithPredicates(NodeChangedPredicates{log: r.Log}),
+			&source.Kind{Type: &corev1.Pod{}},
+			handler.EnqueueRequestsFromMapFunc(r.mapPodToRequest),
+			builder.WithPredicates(PodChangedPredicates{log: r.Log}),
 		).Complete(r)
 }

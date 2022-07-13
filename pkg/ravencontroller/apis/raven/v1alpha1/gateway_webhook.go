@@ -53,6 +53,10 @@ func (g *Gateway) Default() {
 			LabelCurrentGateway: g.Name,
 		},
 	}
+
+	if g.Spec.Replicas == nil {
+		g.Spec.Replicas = func(num int) *int { return &num }(1)
+	}
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
@@ -80,15 +84,32 @@ func (g *Gateway) ValidateDelete() error {
 
 func (g *Gateway) validateGateway() error {
 	var errList field.ErrorList
+
+	replicas := *(g.Spec.Replicas)
+	if replicas <= 0 || replicas > len(g.Spec.Endpoints) {
+		fldPath := field.NewPath("spec").Child("activeEndpointReplicas")
+		errList = append(errList, field.Invalid(fldPath, replicas, "activeEndpointReplicas must be between 1 and the number of endpoints"))
+	}
+
 	for i, ep := range g.Spec.Endpoints {
+		if g.Spec.Central && ep.UnderNAT {
+			fldPath := field.NewPath("spec").Child("endpoints").Index(i).Child("underNAT")
+			errList = append(errList, field.Invalid(fldPath, ep.UnderNAT, "all endpoints in central gateway should not be NATed"))
+		}
+
+		if ep.UnderNAT != g.Spec.Endpoints[0].UnderNAT {
+			fldPath := field.NewPath("spec").Child("endpoints").Index(i).Child("underNAT")
+			errList = append(errList, field.Invalid(fldPath, ep.UnderNAT, "all endpoints must have the same underNAT"))
+		}
+
 		if ep.PublicIP != "" {
 			if err := validateIP(ep.PublicIP); err != nil {
-				fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
+				fldPath := field.NewPath("spec").Child("endpoints").Index(i).Child("publicIP")
 				errList = append(errList, field.Invalid(fldPath, ep.PublicIP, fmt.Sprintf("endpoints[%d].publicIP must be a validate IP address", i)))
 			}
 		}
 		if len(ep.NodeName) == 0 {
-			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("nodeName")
+			fldPath := field.NewPath("spec").Child("endpoints").Index(i).Child("nodeName")
 			errList = append(errList, field.Invalid(fldPath, ep.NodeName, fmt.Sprintf("endpoints[%d].nodeName cannot be empty", i)))
 		}
 	}

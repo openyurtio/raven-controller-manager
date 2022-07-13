@@ -43,20 +43,37 @@ var (
 			},
 		},
 	}
+	podReadyStatus = corev1.PodStatus{
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			},
+		},
+	}
+	podNotReadyStatus = corev1.PodStatus{
+		Conditions: []corev1.PodCondition{
+			{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionFalse,
+			},
+		},
+	}
 )
 
 func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 	mockReconciler := &GatewayReconciler{}
 	var tt = []struct {
-		name       string
-		nodeList   corev1.NodeList
-		gw         *ravenv1alpha1.Gateway
-		expectedEp *ravenv1alpha1.Endpoint
+		name                    string
+		nodeList                corev1.NodeList
+		podList                 corev1.PodList
+		gw                      *ravenv1alpha1.Gateway
+		expectedActiveEndpoints []*ravenv1alpha1.ActiveEndpoint
 	}{
 		{
 			// The node hosting active endpoint becomes NotReady, and it is the only node in the Gateway,
 			// then the active endpoint should be removed.
-			name: "lost active endpoint",
+			name: "lost healthy active endpoint",
 			nodeList: corev1.NodeList{
 				Items: []corev1.Node{
 					{
@@ -67,11 +84,25 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 			},
+			podList: corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-1",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-1",
+						},
+						Status: podNotReadyStatus,
+					},
+				},
+			},
 			gw: &ravenv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "gateway-1",
 				},
 				Spec: ravenv1alpha1.GatewaySpec{
+					Replicas: func(i int) *int { return &i }(1),
 					Endpoints: []ravenv1alpha1.Endpoint{
 						{
 							NodeName: "node-1",
@@ -79,12 +110,23 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 				Status: ravenv1alpha1.GatewayStatus{
-					ActiveEndpoint: &ravenv1alpha1.Endpoint{
-						NodeName: "node-1",
+					ActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+						{
+							Endpoint: &ravenv1alpha1.Endpoint{
+								NodeName: "node-1",
+							},
+						},
 					},
 				},
 			},
-			expectedEp: nil,
+			expectedActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+				{
+					Endpoint: &ravenv1alpha1.Endpoint{
+						NodeName: "node-1",
+					},
+					Healthy: false,
+				},
+			},
 		},
 		{
 			// The node hosting active endpoint becomes NotReady, but there are at least one Ready node,
@@ -105,11 +147,34 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 			},
+			podList: corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-1",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-1",
+						},
+						Status: podNotReadyStatus,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-2",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-2",
+						},
+						Status: podReadyStatus,
+					},
+				},
+			},
 			gw: &ravenv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "gateway-1",
 				},
 				Spec: ravenv1alpha1.GatewaySpec{
+					Replicas: func(i int) *int { return &i }(1),
 					Endpoints: []ravenv1alpha1.Endpoint{
 						{
 							NodeName: "node-1",
@@ -120,13 +185,22 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 				Status: ravenv1alpha1.GatewayStatus{
-					ActiveEndpoint: &ravenv1alpha1.Endpoint{
-						NodeName: "node-1",
+					ActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+						{
+							Endpoint: &ravenv1alpha1.Endpoint{
+								NodeName: "node-1",
+							},
+						},
 					},
 				},
 			},
-			expectedEp: &ravenv1alpha1.Endpoint{
-				NodeName: "node-2",
+			expectedActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+				{
+					Endpoint: &ravenv1alpha1.Endpoint{
+						NodeName: "node-2",
+					},
+					Healthy: true,
+				},
 			},
 		},
 		{
@@ -147,11 +221,34 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 			},
+			podList: corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-1",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-1",
+						},
+						Status: podNotReadyStatus,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-2",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-2",
+						},
+						Status: podReadyStatus,
+					},
+				},
+			},
 			gw: &ravenv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "gateway-1",
 				},
 				Spec: ravenv1alpha1.GatewaySpec{
+					Replicas: func(i int) *int { return &i }(1),
 					Endpoints: []ravenv1alpha1.Endpoint{
 						{
 							NodeName: "node-1",
@@ -162,13 +259,22 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 				Status: ravenv1alpha1.GatewayStatus{
-					ActiveEndpoint: &ravenv1alpha1.Endpoint{
-						NodeName: "node-1",
+					ActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+						{
+							Endpoint: &ravenv1alpha1.Endpoint{
+								NodeName: "node-1",
+							},
+						},
 					},
 				},
 			},
-			expectedEp: &ravenv1alpha1.Endpoint{
-				NodeName: "node-2",
+			expectedActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+				{
+					Endpoint: &ravenv1alpha1.Endpoint{
+						NodeName: "node-2",
+					},
+					Healthy: true,
+				},
 			},
 		},
 		{
@@ -188,11 +294,34 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 			},
+			podList: corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-1",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-1",
+						},
+						Status: podNotReadyStatus,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-2",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-2",
+						},
+						Status: podNotReadyStatus,
+					},
+				},
+			},
 			gw: &ravenv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "gateway-1",
 				},
 				Spec: ravenv1alpha1.GatewaySpec{
+					Replicas: func(i int) *int { return &i }(1),
 					Endpoints: []ravenv1alpha1.Endpoint{
 						{
 							NodeName: "node-1",
@@ -203,10 +332,17 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 				Status: ravenv1alpha1.GatewayStatus{
-					ActiveEndpoint: nil,
+					ActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{},
 				},
 			},
-			expectedEp: nil,
+			expectedActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+				{
+					Endpoint: &ravenv1alpha1.Endpoint{
+						NodeName: "node-1",
+					},
+					Healthy: false,
+				},
+			},
 		},
 		{
 			// The node hosting the active endpoint is still ready, do not change it.
@@ -226,11 +362,34 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 			},
+			podList: corev1.PodList{
+				Items: []corev1.Pod{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-1",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-1",
+						},
+						Status: podNotReadyStatus,
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "pod-2",
+						},
+						Spec: corev1.PodSpec{
+							NodeName: "node-2",
+						},
+						Status: podReadyStatus,
+					},
+				},
+			},
 			gw: &ravenv1alpha1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "gateway-1",
 				},
 				Spec: ravenv1alpha1.GatewaySpec{
+					Replicas: func(i int) *int { return &i }(1),
 					Endpoints: []ravenv1alpha1.Endpoint{
 						{
 							NodeName: "node-1",
@@ -241,21 +400,30 @@ func TestGatewayReconciler_electActiveEndpoint(t *testing.T) {
 					},
 				},
 				Status: ravenv1alpha1.GatewayStatus{
-					ActiveEndpoint: &ravenv1alpha1.Endpoint{
-						NodeName: "node-2",
+					ActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+						{
+							Endpoint: &ravenv1alpha1.Endpoint{
+								NodeName: "node-2",
+							},
+						},
 					},
 				},
 			},
-			expectedEp: &ravenv1alpha1.Endpoint{
-				NodeName: "node-2",
+			expectedActiveEndpoints: []*ravenv1alpha1.ActiveEndpoint{
+				{
+					Endpoint: &ravenv1alpha1.Endpoint{
+						NodeName: "node-2",
+					},
+					Healthy: true,
+				},
 			},
 		},
 	}
 	for _, v := range tt {
 		t.Run(v.name, func(t *testing.T) {
 			a := assert.New(t)
-			ep := mockReconciler.electActiveEndpoint(v.nodeList, v.gw)
-			a.Equal(v.expectedEp, ep)
+			ep, _ := mockReconciler.electActiveEndpoints(v.nodeList, v.podList, v.gw)
+			a.Equal(v.expectedActiveEndpoints, ep)
 		})
 	}
 

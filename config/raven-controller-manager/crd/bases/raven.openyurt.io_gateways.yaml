@@ -17,9 +17,15 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.activeEndpoint.nodeName
-      name: ActiveEndpoint
+    - jsonPath: .status.activeEndpoints[*].endpoint.nodeName
+      name: ActiveEndpoints
       type: string
+    - jsonPath: .status.central
+      name: Central
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -40,6 +46,9 @@ spec:
           spec:
             description: GatewaySpec defines the desired state of Gateway
             properties:
+              central:
+                description: Central indicates a gateway can be the central gateway
+                type: boolean
               endpoints:
                 description: TODO add a field to configure using vxlan or host-gw
                   for inner gateway communication? Endpoints is a list of available
@@ -109,48 +118,89 @@ spec:
                       are ANDed.
                     type: object
                 type: object
+              replicas:
+                description: Replicas is the desired number of active endpoints.
+                type: integer
             required:
             - endpoints
             type: object
           status:
             description: GatewayStatus defines the observed state of Gateway
             properties:
-              activeEndpoint:
-                description: ActiveEndpoint is the reference of the active endpoint.
-                properties:
-                  config:
-                    additionalProperties:
-                      type: string
-                    type: object
-                  nodeName:
-                    description: NodeName is the Node hosting this endpoint.
-                    type: string
-                  publicIP:
-                    type: string
-                  underNAT:
-                    type: boolean
-                required:
-                - nodeName
-                type: object
-              nodes:
-                description: Nodes contains all information of nodes managed by Gateway.
+              activeEndpoints:
+                description: ActiveEndpoints is a list of active endpoints
                 items:
-                  description: NodeInfo stores information of node managed by Gateway.
+                  description: ActiveEndpoint defines the active endpoint that selected
+                    by controller manager.
                   properties:
-                    nodeName:
-                      type: string
-                    privateIP:
-                      type: string
-                    subnets:
+                    endpoint:
+                      description: Endpoint is the reference of the active endpoint.
+                      properties:
+                        config:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        nodeName:
+                          description: NodeName is the Node hosting this endpoint.
+                          type: string
+                        publicIP:
+                          type: string
+                        underNAT:
+                          type: boolean
+                      required:
+                      - nodeName
+                      type: object
+                    forwards:
+                      description: Forwards contains all vpn connections this active
+                        endpoint managed by. This field is used only when the gateway
+                        is the central gateway.
                       items:
-                        type: string
+                        description: Forward stores the traffic that the central gateway
+                          is responsible for forwarding
+                        properties:
+                          from:
+                            type: string
+                          to:
+                            type: string
+                        required:
+                        - from
+                        - to
+                        type: object
+                      type: array
+                    healthy:
+                      description: Healthy indicates whether this active endpoint
+                        is healthy
+                      type: boolean
+                    nodes:
+                      description: Nodes contains all information of nodes managed
+                        by active endpoint.
+                      items:
+                        description: NodeInfo stores information of node managed by
+                          Gateway.
+                        properties:
+                          nodeName:
+                            type: string
+                          privateIP:
+                            type: string
+                          subnets:
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - nodeName
+                        - privateIP
+                        - subnets
+                        type: object
                       type: array
                   required:
-                  - nodeName
-                  - privateIP
-                  - subnets
+                  - endpoint
+                  - healthy
+                  - nodes
                   type: object
                 type: array
+              central:
+                description: Central indicates a gateway is the central gateway
+                type: boolean
             type: object
         type: object
     served: true

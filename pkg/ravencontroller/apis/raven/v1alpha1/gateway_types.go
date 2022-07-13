@@ -22,10 +22,10 @@ import (
 
 // Event reason.
 const (
-	// EventActiveEndpointElected is the event indicating a new active endpoint is elected.
-	EventActiveEndpointElected = "ActiveEndpointElected"
-	// EventActiveEndpointLost is the event indicating the active endpoint is lost.
-	EventActiveEndpointLost = "ActiveEndpointLost"
+	// EventActiveEndpointsElected is the event indicating new active endpoint were elected.
+	EventActiveEndpointsElected = "ActiveEndpointsElected"
+	// EventActiveEndpointsLost is the event indicating the active endpoints were lost.
+	EventActiveEndpointsLost = "ActiveEndpointsLost"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -39,6 +39,10 @@ type GatewaySpec struct {
 	// TODO add a field to configure using vxlan or host-gw for inner gateway communication?
 	// Endpoints is a list of available Endpoint.
 	Endpoints []Endpoint `json:"endpoints"`
+	// Replicas is the desired number of active endpoints.
+	Replicas *int `json:"replicas,omitempty"`
+	// Central indicates a gateway can be the central gateway
+	Central bool `json:"central,omitempty"`
 }
 
 // Endpoint stores all essential data for establishing the VPN tunnel.
@@ -58,12 +62,31 @@ type NodeInfo struct {
 	Subnets   []string `json:"subnets"`
 }
 
+// Forward stores the traffic that the central gateway is responsible for forwarding
+type Forward struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// ActiveEndpoint defines the active endpoint that selected by controller manager.
+type ActiveEndpoint struct {
+	// Endpoint is the reference of the active endpoint.
+	Endpoint *Endpoint `json:"endpoint"`
+	// Nodes contains all information of nodes managed by active endpoint.
+	Nodes []NodeInfo `json:"nodes"`
+	// Forwards contains all vpn connections this active endpoint managed by.
+	// This field is used only when the gateway is the central gateway.
+	Forwards []Forward `json:"forwards,omitempty"`
+	// Healthy indicates whether this active endpoint is healthy
+	Healthy bool `json:"healthy"`
+}
+
 // GatewayStatus defines the observed state of Gateway
 type GatewayStatus struct {
-	// Nodes contains all information of nodes managed by Gateway.
-	Nodes []NodeInfo `json:"nodes,omitempty"`
-	// ActiveEndpoint is the reference of the active endpoint.
-	ActiveEndpoint *Endpoint `json:"activeEndpoint,omitempty"`
+	// ActiveEndpoints is a list of active endpoints
+	ActiveEndpoints []*ActiveEndpoint `json:"activeEndpoints,omitempty"`
+	// Central indicates a gateway is the central gateway
+	Central bool `json:"central,omitempty"`
 }
 
 //+genclient
@@ -71,7 +94,9 @@ type GatewayStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster
-//+kubebuilder:printcolumn:name="ActiveEndpoint",type=string,JSONPath=`.status.activeEndpoint.nodeName`
+//+kubebuilder:printcolumn:name="ActiveEndpoints",type=string,JSONPath=`.status.activeEndpoints[*].endpoint.nodeName`
+//+kubebuilder:printcolumn:name="Central",type=boolean,JSONPath=`.status.central`
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // Gateway is the Schema for the gateways API
 type Gateway struct {
