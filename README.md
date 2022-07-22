@@ -1,5 +1,13 @@
 # Raven-controller-manager
 
+<div align="left">
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/openyurtio/raven-controller-manager)](https://goreportcard.com/report/github.com/openyurtio/raven-controller-manager)
+[![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![codecov](https://codecov.io/gh/openyurtio/raven-controller-manager/branch/main/graph/badge.svg)](https://codecov.io/gh/openyurtio/raven-controller-manager)
+
+</div>
+
 Raven-controller-manager is the controller for [Gateway](https://github.com/openyurtio/raven-controller-manager/blob/main/pkg/ravencontroller/apis/raven/v1alpha1/gateway_types.go) CRD.
 This project should be used together with the Raven project, which provides network connectivity among pods in different physical regions or network regions.
 
