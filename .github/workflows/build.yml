@@ -29,8 +29,20 @@ jobs:
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-buildx-
+
       - name: Unit test
         run: make test
+
+      - name: Publish Unit Test Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          name: codecov-umbrella
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: unittests
+          files: ./cover.out
+          fail_ci_if_error: true
+          verbose: true
+
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
