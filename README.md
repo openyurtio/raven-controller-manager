@@ -2,10 +2,10 @@
 
 <div align="left">
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/openyurtio/raven-controller-manager)](https://goreportcard.com/report/github.com/openyurtio/raven-controller-manager)
+[![Version](https://img.shields.io/badge/RavenControllerManager-v0.1.0-orange)](https://github.com/openyurtio/raven-controller-manager/releases/tag/v0.1.0)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![Go Report Card](https://goreportcard.com/badge/github.com/openyurtio/raven-controller-manager)](https://goreportcard.com/report/github.com/openyurtio/raven-controller-manager)
 [![codecov](https://codecov.io/gh/openyurtio/raven-controller-manager/branch/main/graph/badge.svg)](https://codecov.io/gh/openyurtio/raven-controller-manager)
-
 </div>
 
 Raven-controller-manager is the controller for [Gateway](https://github.com/openyurtio/raven-controller-manager/blob/main/pkg/ravencontroller/apis/raven/v1alpha1/gateway_types.go) CRD.
