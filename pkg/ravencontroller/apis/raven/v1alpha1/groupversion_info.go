@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package v1alpha1 contains API Schema definitions for the raven v1alpha1 API group
-//+kubebuilder:object:generate=true
-//+groupName=raven.openyurt.io
+// +kubebuilder:object:generate=true
+// +groupName=raven.openyurt.io
 package v1alpha1
 
 import (
