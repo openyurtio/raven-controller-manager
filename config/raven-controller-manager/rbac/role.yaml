@@ -98,3 +98,16 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+    - ""
+  resources:
+    - pods
+    - services
+    - configmaps
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - update
+    - watch

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: x-raven-server-svc
+  namespace: kube-system
+  labels:
+    yurt-app: yurt-tunnel-server
+spec:
+  selector:
+    yurt-app: yurt-tunnel-server
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - name: tcp
+      port: 10262
+      targetPort: 10262
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: x-raven-server-internal-svc
+  namespace: kube-system
+  labels:
+    yurt-app: yurt-tunnel-server
+spec:
+  selector:
+    yurt-app: yurt-tunnel-server
+  ports:
+    - name: https
+      port: 10250
+      targetPort: 10263
+    - name: http
+      port: 10255
+      targetPort: 10264

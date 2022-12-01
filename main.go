@@ -19,10 +19,14 @@ package main
 import (
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	klogv2 "k8s.io/klog/v2"
@@ -30,10 +34,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	dnsctl "github.com/openyurtio/raven-controller-manager/pkg/dnscontroller"
 	calicov3 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/calico/v3"
 	ravenv1alpha1 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/raven/v1alpha1"
+	ravenClientset "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/client/clientset/versioned"
 	"github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/controllers"
 	ravenwebhook "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/webhook"
+	svcctl "github.com/openyurtio/raven-controller-manager/pkg/servicecontroller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -51,20 +58,52 @@ func init() {
 }
 
 func main() {
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var syncPeriod int
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.IntVar(&syncPeriod, "sync-period", 1200, "The synchronization period of the raven controller manager. ")
 
 	klogv2.InitFlags(flag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(klogr.New())
 
+	// add dns controller and service controller for raven L7 proxy
+	cfg := ctrl.GetConfigOrDie()
+	kubeClient, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		klogv2.V(2).Infof("failed to create kubernetes client set, %v", err)
+	}
+
+	ravenClient, err := ravenClientset.NewForConfig(cfg)
+	if err != nil {
+		klogv2.V(2).Infof("failed to create raven client set, %v", err)
+	}
+
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM,
+		syscall.SIGQUIT, syscall.SIGILL, syscall.SIGTRAP, syscall.SIGABRT)
+	stop := make(chan struct{})
+	go func() {
+		<-s
+		close(stop)
+	}()
+
+	setupLog.Info("starting dns and service controller")
+	svc := svcctl.NewServiceController(kubeClient, ravenClient, syncPeriod)
+	dns := dnsctl.NewCoreDNSRecordController(kubeClient, syncPeriod)
+	go svc.Run(stop)
+	go dns.Run(stop)
+
+	//add raven controller
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,

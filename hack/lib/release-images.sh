@@ -138,5 +138,6 @@ gen_yamls() {
     set +x
     echo "==== create raven-controller-manager.yaml in $OUT_YAML_DIR ===="
     kustomize build ${BUILD_YAML_DIR}/default > ${OUT_YAML_DIR}/raven-controller-manager.yaml
+    kustomize build ${BUILD_YAML_DIR}/tunnel > ${OUT_YAML_DIR}/raven-server-controller.yaml
     rm -Rf ${BUILD_YAML_DIR}
 }

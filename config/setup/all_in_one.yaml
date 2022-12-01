@@ -303,6 +303,19 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+      - configmaps
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - update
+      - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -544,3 +557,50 @@ webhooks:
         resources:
           - gateways
     sideEffects: None
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: yurt-tunnel-server-cfg
+data:
+  localhost-proxy-ports: "10255, 10250, 10266, 10267"
+  http-proxy-ports: "9445"
+  https-proxy-ports: "9100"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: raven-server-svc
+  namespace: kube-system
+  labels:
+    yurt-app: yurt-tunnel-server
+spec:
+  selector:
+    yurt-app: yurt-tunnel-server
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - name: tcp
+      port: 10262
+      targetPort: 10262
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: raven-server-internal-svc
+  namespace: kube-system
+  labels:
+    yurt-app: yurt-tunnel-server
+spec:
+  selector:
+    yurt-app: yurt-tunnel-server
+  ports:
+    - name: https
+      port: 10250
+      targetPort: 10263
+    - name: http
+      port: 10255
+      targetPort: 10264

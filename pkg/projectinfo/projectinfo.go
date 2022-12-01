@@ -22,10 +22,23 @@ import (
 )
 
 var (
-	gitVersion = "v0.0.0"
-	gitCommit  = "unknown"
-	buildDate  = "1970-01-01T00:00:00Z"
+	gitVersion    = "v0.0.0"
+	gitCommit     = "unknown"
+	buildDate     = "1970-01-01T00:00:00Z"
+	projectPrefix = "yurt"
+	labelPrefix   = "openyurt.io"
 )
+
+// The project prefix is yurt
+func GetProjectPrefix() string {
+	return projectPrefix
+}
+
+// GetEdgeWorkerLabelKey returns the edge-worker node label ("openyurt.io/is-edge-worker"),
+// which is used to identify if a node is edge node ("true") or cloud node ("false")
+func GetEdgeWorkerLabelKey() string {
+	return labelPrefix + "/is-edge-worker"
+}
 
 // normalizeGitCommit reserve 7 characters for gitCommit
 func normalizeGitCommit(commit string) string {
