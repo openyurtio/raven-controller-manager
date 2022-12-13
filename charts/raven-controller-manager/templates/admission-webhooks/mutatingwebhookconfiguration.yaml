@@ -1,0 +1,27 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: raven-mutating-webhook-configuration
+webhooks:
+  - admissionReviewVersions:
+      - v1
+      - v1beta1
+    clientConfig:
+      service:
+        name: raven-webhook-service
+        namespace: kube-system
+        path: /mutate-raven-openyurt-io-v1alpha1-gateway
+    failurePolicy: Fail
+    name: mgateway.kb.io
+    rules:
+      - apiGroups:
+          - raven.openyurt.io
+        apiVersions:
+          - v1alpha1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - gateways
+    sideEffects: None

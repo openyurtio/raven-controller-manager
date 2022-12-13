@@ -1,0 +1,72 @@
+# Default values for raven-controller-manager.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: openyurt/raven-controller-manager
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "raven-controller-manager"
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext:
+  allowPrivilegeEscalation: false
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+   limits:
+     cpu: 100m
+     memory: 30Mi
+   requests:
+     cpu: 100m
+     memory: 20Mi
+
+nodeSelector:
+  beta.kubernetes.io/arch: amd64
+  beta.kubernetes.io/os: linux
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - preference:
+          matchExpressions:
+            - key: openyurt.io/is-edge-worker
+              operator: In
+              values:
+              - "false"
+        weight: 2
+      - preference:
+          matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: DoesNotExist
+        weight: 1
+
+tolerations: [{"key": "node-role.kubernetes.io/master", "operator": "Exists", "effect": "NoSchedule"}]
+
+webhook:
+  service:
+    targetPort: 9443
+  certificate:
+    mountPath: /tmp/k8s-webhook-server/serving-certs
