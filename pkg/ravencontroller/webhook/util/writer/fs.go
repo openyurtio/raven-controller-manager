@@ -21,7 +21,6 @@ package writer
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -104,7 +103,7 @@ func (f *fsCertWriter) doWrite() (*generator.Artifacts, error) {
 func WriteCertsToDir(path string, certs *generator.Artifacts) error {
 	// Writer's algorithm only manages files using symbolic link.
 	// If a file is not a symbolic link, will ignore the update for it.
-	// We want to cleanup for Writer by removing old files that are not symbolic links.
+	// We want to clean up for Writer by removing old files that are not symbolic links.
 	err := prepareToWrite(path)
 	if err != nil {
 		return err
@@ -157,19 +156,19 @@ func (f *fsCertWriter) read() (*generator.Artifacts, error) {
 	if err := ensureExist(f.Path); err != nil {
 		return nil, err
 	}
-	caKeyBytes, err := ioutil.ReadFile(path.Join(f.Path, CAKeyName))
+	caKeyBytes, err := os.ReadFile(path.Join(f.Path, CAKeyName))
 	if err != nil {
 		return nil, err
 	}
-	caCertBytes, err := ioutil.ReadFile(path.Join(f.Path, CACertName))
+	caCertBytes, err := os.ReadFile(path.Join(f.Path, CACertName))
 	if err != nil {
 		return nil, err
 	}
-	certBytes, err := ioutil.ReadFile(path.Join(f.Path, ServerCertName))
+	certBytes, err := os.ReadFile(path.Join(f.Path, ServerCertName))
 	if err != nil {
 		return nil, err
 	}
-	keyBytes, err := ioutil.ReadFile(path.Join(f.Path, ServerKeyName))
+	keyBytes, err := os.ReadFile(path.Join(f.Path, ServerKeyName))
 	if err != nil {
 		return nil, err
 	}

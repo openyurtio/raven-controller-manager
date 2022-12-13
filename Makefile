@@ -56,7 +56,7 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 test: fmt vet ## Run test
-	go test ./... -coverprofile cover.out
+	go test -v -short ./... -coverprofile cover.out
 
 build: generate
 	bash hack/make-rules/build.sh
