@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // Event reason.
@@ -28,8 +29,19 @@ const (
 	EventActiveEndpointLost = "ActiveEndpointLost"
 )
 
+var ServiceNamespacedName = types.NamespacedName{
+	Namespace: "kube-system",
+	Name:      "raven-agent-service",
+}
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+type ExposeType string
+
+const (
+	ExposeTypeLoadBalancer = "LoadBalancer"
+)
 
 // GatewaySpec defines the desired state of Gateway
 type GatewaySpec struct {
@@ -39,6 +51,8 @@ type GatewaySpec struct {
 	// TODO add a field to configure using vxlan or host-gw for inner gateway communication?
 	// Endpoints is a list of available Endpoint.
 	Endpoints []Endpoint `json:"endpoints"`
+	// ExposeType determines how the Gateway is exposed.
+	ExposeType ExposeType `json:"exposeType,omitempty"`
 }
 
 // Endpoint stores all essential data for establishing the VPN tunnel.

@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package gateway
 
 import (
 	"context"
 	"fmt"
-	"net"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +40,7 @@ import (
 
 	calicov3 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/calico/v3"
 	ravenv1alpha1 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/raven/v1alpha1"
+	"github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/controllers/util"
 )
 
 // GatewayReconciler reconciles a Gateway object
@@ -50,11 +51,13 @@ type GatewayReconciler struct {
 	recorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=raven.openyurt.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=raven.openyurt.io,resources=gateways,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=raven.openyurt.io,resources=gateways/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=raven.openyurt.io,resources=gateways/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=endpoints,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=crd.projectcalico.org,resources=blockaffinities,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -89,6 +92,18 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 1. try to elect an active endpoint if possible
 	activeEp := r.electActiveEndpoint(nodeList, &gw)
 	r.recordEndpointEvent(ctx, &gw, gw.Status.ActiveEndpoint, activeEp)
+	if util.IsGatewayExposeByLB(&gw) {
+		var svc corev1.Service
+		if err := r.Get(ctx, ravenv1alpha1.ServiceNamespacedName, &svc); err != nil {
+			log.V(2).Info("waiting for service sync", "error", err)
+			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+		}
+		if len(svc.Status.LoadBalancer.Ingress) == 0 {
+			log.V(2).Info("waiting for LB ingress sync")
+			return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+		}
+		activeEp.PublicIP = svc.Status.LoadBalancer.Ingress[0].IP
+	}
 	gw.Status.ActiveEndpoint = activeEp
 
 	// 2. get nodeInfo list of nodes managed by the Gateway
@@ -101,7 +116,7 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		nodes = append(nodes, ravenv1alpha1.NodeInfo{
 			NodeName:  v.Name,
-			PrivateIP: getNodeInternalIP(v),
+			PrivateIP: util.GetNodeInternalIP(v),
 			Subnets:   podCIDRs,
 		})
 	}
@@ -232,18 +247,6 @@ func getNodeCondition(status *corev1.NodeStatus, conditionType corev1.NodeCondit
 		}
 	}
 	return -1, nil
-}
-
-// getNodeInternalIP returns internal ip of the given `node`.
-func getNodeInternalIP(node corev1.Node) string {
-	var ip string
-	for _, addr := range node.Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP && net.ParseIP(addr.Address) != nil {
-			ip = addr.Address
-			break
-		}
-	}
-	return ip
 }
 
 // getPodCIDRs returns the pod IP ranges assigned to the node.

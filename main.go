@@ -32,7 +32,8 @@ import (
 
 	calicov3 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/calico/v3"
 	ravenv1alpha1 "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/apis/raven/v1alpha1"
-	"github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/controllers"
+	"github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/controllers/gateway"
+	"github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/controllers/service"
 	ravenwebhook "github.com/openyurtio/raven-controller-manager/pkg/ravencontroller/webhook"
 	//+kubebuilder:scaffold:imports
 )
@@ -77,7 +78,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.GatewayReconciler{
+	if err = (&gateway.GatewayReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Gateway"),
 		Scheme: mgr.GetScheme(),
@@ -85,6 +86,16 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Gateway")
 		os.Exit(1)
 	}
+
+	if err = (&service.ServiceReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("Service"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Service")
+		os.Exit(1)
+	}
+
 	if err = (&ravenv1alpha1.Gateway{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "Gateway")
 		os.Exit(1)
