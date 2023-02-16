@@ -1,0 +1,27 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: raven-validating-webhook-configuration
+webhooks:
+  - admissionReviewVersions:
+      - v1
+      - v1beta1
+    clientConfig:
+      service:
+        name: raven-webhook-service
+        namespace: kube-system
+        path: /validate-raven-openyurt-io-v1alpha1-gateway
+    failurePolicy: Fail
+    name: vgateway.kb.io
+    rules:
+      - apiGroups:
+          - raven.openyurt.io
+        apiVersions:
+          - v1alpha1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - gateways
+    sideEffects: None
