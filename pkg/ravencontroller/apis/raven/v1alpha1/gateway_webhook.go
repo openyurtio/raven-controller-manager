@@ -80,16 +80,32 @@ func (g *Gateway) ValidateDelete() error {
 
 func (g *Gateway) validateGateway() error {
 	var errList field.ErrorList
+	if len(g.Spec.Endpoints) == 0 {
+		fldPath := field.NewPath("spec").Child("endpoints")
+		errList = append(errList, field.Invalid(fldPath, g.Spec.Endpoints, "missing required field 'endpoints'"))
+	}
+
+	underNAT := g.Spec.Endpoints[0].UnderNAT
 	for i, ep := range g.Spec.Endpoints {
+		if ep.UnderNAT != underNAT {
+			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("underNAT")
+			errList = append(errList, field.Invalid(fldPath, ep.UnderNAT, "the 'underNAT' field in endpoints must be the same"))
+		}
+
 		if ep.PublicIP != "" {
+			if g.Spec.ExposeType == ExposeTypeLoadBalancer {
+				fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
+				errList = append(errList, field.Invalid(fldPath, ep.PublicIP, fmt.Sprintf("the 'publicIP' field must not be set when spec.exposeType = %s", ExposeTypeLoadBalancer)))
+			}
+
 			if err := validateIP(ep.PublicIP); err != nil {
 				fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("publicIP")
-				errList = append(errList, field.Invalid(fldPath, ep.PublicIP, fmt.Sprintf("endpoints[%d].publicIP must be a validate IP address", i)))
+				errList = append(errList, field.Invalid(fldPath, ep.PublicIP, "the 'publicIP' field must be a validate IP address"))
 			}
 		}
 		if len(ep.NodeName) == 0 {
 			fldPath := field.NewPath("spec").Child(fmt.Sprintf("endpoints[%d]", i)).Child("nodeName")
-			errList = append(errList, field.Invalid(fldPath, ep.NodeName, fmt.Sprintf("endpoints[%d].nodeName cannot be empty", i)))
+			errList = append(errList, field.Invalid(fldPath, ep.NodeName, "the 'nodeName' field must not be empty"))
 		}
 	}
 	if errList != nil {

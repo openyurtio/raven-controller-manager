@@ -63,6 +63,9 @@ spec:
                   - nodeName
                   type: object
                 type: array
+              exposeType:
+                description: ExposeType determines how the Gateway is exposed.
+                type: string
               nodeSelector:
                 description: NodeSelector is a label query over nodes that managed
                   by the gateway. The nodes in the same gateway should share same

@@ -39,7 +39,8 @@ func TestGetHost(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("\tTestCase: %s", tt.name)
@@ -65,7 +66,8 @@ func TestGetNamespace(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("\tTestCase: %s", tt.name)
@@ -91,7 +93,8 @@ func TestGetSecretName(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("\tTestCase: %s", tt.name)
@@ -117,7 +120,8 @@ func TestGetServiceName(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("\tTestCase: %s", tt.name)
@@ -143,7 +147,8 @@ func TestGetPort(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("\tTestCase: %s", tt.name)
@@ -169,7 +174,8 @@ func TestGetCertDir(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("\tTestCase: %s", tt.name)

@@ -44,8 +44,8 @@ resources:
      memory: 20Mi
 
 nodeSelector:
-  beta.kubernetes.io/arch: amd64
-  beta.kubernetes.io/os: linux
+  kubernetes.io/arch: amd64
+  kubernetes.io/os: linux
 
 affinity:
   nodeAffinity:
